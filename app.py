@@ -239,7 +239,7 @@ def generate():
         os.remove(filepath)
 
         return render_template('index.html',
-                             message=f"Successfully generated {num_certificates} certificate(s)!",
+                             message=f"Successfully generated {num_certificates} certificate(s)! Data found: {lines}",
                              success=True)
 
     except Exception as e:
