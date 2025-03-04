@@ -1,1 +1,5 @@
 antenv/**
+data/**
+uploads/**
+**/__pycache__/**
+idyllic-root-415700-1182fafe8fdE.json
