@@ -85,30 +85,195 @@
                 <label for="template_image">Certificate Template Image:</label>
                 <input type="file" id="template_image" name="template_image" accept="image/*" required>
                 <div class="file-info">Supported formats: PNG, JPG, JPEG</div>
+                <div id="preview-container" style="margin-top: 10px; display: none;">
+                    <h3>Preview</h3>
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <h4>Uploaded Image</h4>
+                            <img id="preview-image" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        <div style="flex: 1;">
+                            <h4>Detected Text</h4>
+                            <div id="ocr-lines" style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="form-group">
                 <label for="num_certificates">Number of Certificates to Generate:</label>
                 <input type="number" id="num_certificates" name="num_certificates" min="1" max="100" value="1" required>
             </div>
             <div class="form-group">
-                <label for="input_name">Name to Replace:</label>
-                <input type="text" id="input_name" name="input_name" value="Madhur Ravindra Hase" required>
-            </div>
-            <div class="form-group">
-                <label for="input_date">Start Date to Replace:</label>
-                <input type="text" id="input_date" name="input_date" value="August 20, 2024" required>
-            </div>
-            <div class="form-group">
-                <label for="input_expire_date">Expire Date to Replace:</label>
-                <input type="text" id="input_expire_date" name="input_expire_date" value="08/20/2027" required>
+                <h3>Additional Parameters</h3>
+                <div id="additional-params">
+                    <!-- Additional parameters will be added here -->
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <input type="text" id="param-input" placeholder="What to replace" style="flex: 2;">
+                    <select id="param-type" style="flex: 1;" title="Select the type of parameter to replace">
+                        <option value="text">Random Name</option>
+                        <option value="date1">Random Date (Month Day, Year)</option>
+                        <option value="date2">Random Date (MM/DD/YYYY)</option>
+                        <option value="numeric">Random Numeric ID</option>
+                    </select>
+                    <button type="button" id="add-param" style="width: auto;">Add</button>
+                </div>
             </div>
             <button type="submit">Generate Certificates</button>
         </form>
         {% if message %}
         <div class="result {{ 'success' if success else 'error' }}">
-            {{ message }} <a href="/data">See data</a>
+            {{ message }}
         </div>
         {% endif %}
+        <div id="generated-files" style="margin-top: 20px; display: none;">
+            <h3>Generated Certificates</h3>
+            <div id="files-list" style="background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+        </div>
     </div>
+
+    <script>
+        document.getElementById('template_image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('template_image', file);
+            formData.append('preview', 'true');
+
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const previewContainer = document.getElementById('preview-container');
+                const ocrLines = document.getElementById('ocr-lines');
+                const previewImage = document.getElementById('preview-image');
+                
+                if (data.success) {
+                    previewContainer.style.display = 'block';
+                    previewImage.src = URL.createObjectURL(file);
+                    ocrLines.innerHTML = data.texts.map(text => `<div>${text}</div>`).join('');
+                } else {
+                    previewContainer.style.display = 'none';
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing image');
+            });
+        });
+
+        // Additional parameters handling
+        document.getElementById('add-param').addEventListener('click', function() {
+            const input = document.getElementById('param-input').value;
+            const type = document.getElementById('param-type').value;
+            
+            if (!input) {
+                alert('Please enter what to replace');
+                return;
+            }
+
+            const paramContainer = document.createElement('div');
+            paramContainer.className = 'form-group';
+            paramContainer.style.border = '1px solid #ddd';
+            paramContainer.style.padding = '10px';
+            paramContainer.style.marginBottom = '10px';
+            paramContainer.style.borderRadius = '4px';
+
+            const paramId = 'param-' + Date.now();
+            
+            paramContainer.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <label>Replace: ${input}</label>
+                        <input type="text" name="param_${paramId}" value="${input}" style="width: 100%;">
+                    </div>
+                    <button type="button" class="remove-param" style="width: auto; margin-left: 10px;">Remove</button>
+                </div>
+            `;
+
+            document.getElementById('additional-params').appendChild(paramContainer);
+            
+            // Clear input
+            document.getElementById('param-input').value = '';
+            
+            // Add remove button functionality
+            paramContainer.querySelector('.remove-param').addEventListener('click', function() {
+                paramContainer.remove();
+            });
+        });
+
+        // Handle form submission
+        document.querySelector('form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            // Add additional parameters to formData
+            const additionalParams = [];
+            document.querySelectorAll('#additional-params .form-group').forEach((param, index) => {
+                const input = param.querySelector('input[type="text"]');
+                additionalParams.push({
+                    text: input.value,
+                    type: document.getElementById('param-type').value
+                });
+            });
+            
+            formData.append('additional_params', JSON.stringify(additionalParams));
+            
+            // Show loading state
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            submitButton.textContent = 'Generating...';
+            submitButton.disabled = true;
+            
+            // Submit the form
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Display success message
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = data.message;
+                    document.querySelector('.result')?.remove();
+                    document.querySelector('.container').insertBefore(resultDiv, document.getElementById('generated-files'));
+                    
+                    // Display generated files
+                    const filesList = document.getElementById('files-list');
+                    filesList.innerHTML = data.files.map(file => 
+                        `<div><a href="/data/${file}" target="_blank">${file}</a></div>`
+                    ).join('');
+                    document.getElementById('generated-files').style.display = 'block';
+                } else {
+                    // Display error message
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = data.message;
+                    document.querySelector('.result')?.remove();
+                    document.querySelector('.container').insertBefore(resultDiv, document.getElementById('generated-files'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 'Error generating certificates';
+                document.querySelector('.result')?.remove();
+                document.querySelector('.container').insertBefore(resultDiv, document.getElementById('generated-files'));
+            })
+            .finally(() => {
+                // Reset button state
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+            });
+        });
+    </script>
 </body>
 </html> 

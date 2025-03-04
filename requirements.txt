@@ -1,4 +1,7 @@
-flask==3.0.2
-Pillow==10.2.0
-pytesseract==0.3.10
-opencv-python-headless
+flask==2.0.1
+opencv-python==4.5.3.56
+Pillow==8.3.2
+pytesseract==0.3.8
+google-cloud-vision==3.4.4
+google-auth==2.22.0
+google-auth-oauthlib==1.0.0

@@ -4,12 +4,16 @@ from PIL import Image, ImageDraw, ImageFont
 import pytesseract
 import random
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, render_template
+from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, render_template, jsonify
 import os
 from werkzeug.utils import secure_filename
+from google.cloud import vision
+import io
+from google.oauth2 import service_account
+import json
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Required for flash messages
+app.secret_key = 'AIzaSyAo-L2tvjg-l1PSES4iX3LBOITrTglhJuU'  # Required for flash messages
 
 # Configure upload folder
 UPLOAD_FOLDER = 'uploads'
@@ -17,6 +21,12 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Initialize Google Cloud Vision client with service account credentials
+credentials = service_account.Credentials.from_service_account_file(
+    'idyllic-root-415700-1182fafe8fdc.json'
+)
+vision_client = vision.ImageAnnotatorClient(credentials=credentials)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -62,6 +72,70 @@ def generate_name():
     return " ".join(name_parts)
 
 
+
+def replace_text(draw, lines, old_name, new_name, x_offset=0, y_offset=0):
+    words = re.split(r'[\s;]+', old_name.strip())
+    
+    # Remove empty strings if any
+    words = [word for word in words if word]
+
+    name_bbox, estimated_font_size = get_encompassing_box(lines, words)
+
+    if name_bbox is not None:
+        # Choose a font (adjust path as needed)
+        font_path = "dejavu-sans-condensed.ttf"
+        font_size = estimated_font_size
+        font = ImageFont.truetype(font_path, font_size)
+        # Cover the existing name with a white rectangle
+        draw.rectangle([name_bbox[0], name_bbox[1], name_bbox[0] + name_bbox[2], name_bbox[1] + name_bbox[3]], fill="white")
+        # Write the new name with offset
+        draw.text((name_bbox[0] + x_offset, name_bbox[1] + y_offset), new_name, fill="black", font=font)
+
+
+def prepare_image(input_image_path):
+    # Load the image
+    image = cv2.imread(input_image_path)
+    
+    # Convert to RGB for Google Cloud Vision
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Convert to bytes for Google Cloud Vision
+    success, buffer = cv2.imencode('.jpg', image_rgb)
+    content = buffer.tobytes()
+    
+    # Create image object for Google Cloud Vision
+    image = vision.Image(content=content)
+    
+    # Perform text detection
+    response = vision_client.text_detection(image=image)
+    texts = response.text_annotations
+    
+    if not texts:
+        return None, {}
+    # Group words into lines based on y-coordinates
+    lines = {}
+    for text in texts[1:]:  # Skip the first element as it contains all text
+        vertices = text.bounding_poly.vertices
+        # Calculate bounding box dimensions
+        x = vertices[0].x
+        y = vertices[0].y
+        width = vertices[1].x - vertices[0].x
+        height = vertices[2].y - vertices[0].y
+        
+        # Group by y-coordinate (with some tolerance for line alignment)
+        y_key = round(y)
+        if y_key not in lines:
+            lines[y_key] = []
+        lines[y_key].append((text.description, x, width, height))
+    
+    print(lines)
+
+    # Convert image to RGB to avoid palette color issues
+    original_pil = Image.open(input_image_path).convert("RGB")
+    
+    return original_pil, lines
+
+
 def get_encompassing_box(lines, target_words):
     word_boxes = []
     
@@ -86,70 +160,32 @@ def get_encompassing_box(lines, target_words):
     return (x_min, y_min, x_max - x_min, y_max - y_min), estimated_font_size
 
 
-def replace_text(draw, lines, old_name, new_name, x_offset=0, y_offset=-3):
-    words = re.split(r'[\s;]+', old_name.strip())
-    
-    # Remove empty strings if any
-    words = [word for word in words if word]
+def generate_numeric_id(length):
+    """Generate a random numeric ID with the specified length"""
+    return ''.join(str(random.randint(0, 9)) for _ in range(length))
 
-    name_bbox, estimated_font_size = get_encompassing_box(lines, words)
-
-    if name_bbox is not None:
-        # Choose a font (adjust path as needed)
-        font_path = "dejavu-sans-condensed.ttf"
-        font_size = estimated_font_size
-        font = ImageFont.truetype(font_path, font_size)
-        # Cover the existing name with a white rectangle
-        draw.rectangle([name_bbox[0], name_bbox[1], name_bbox[0] + name_bbox[2], name_bbox[1] + name_bbox[3]], fill="white")
-        # Write the new name with offset
-        draw.text((name_bbox[0] + x_offset, name_bbox[1] + y_offset), new_name, fill="black", font=font)
-
-
-def prepare_image(input_image_path):
-    # Load the image
-    image = cv2.imread(input_image_path)
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # Apply thresholding to enhance text detection
-    gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    # Run OCR with optimized settings
-    custom_oem_psm_config = r'--oem 3 --psm 6'  # OCR setting
-    data = pytesseract.image_to_data(gray, config=custom_oem_psm_config, output_type=pytesseract.Output.DICT)
-    # Group words into full lines
-    lines = {}
-    for i in range(len(data["text"])):
-        word = data["text"][i].strip()
-        if word:
-            y = data["top"][i]
-            if y not in lines:
-                lines[y] = []
-            lines[y].append((word, data["left"][i], data["width"][i], data["height"][i]))
-
-    # Sort lines by y position
-    #sorted_lines = sorted(lines.items())
-    #print(lines)
-
-    # Convert image to RGB to avoid palette color issues
-    original_pil = Image.open(input_image_path).convert("RGB")
-
-    return original_pil, lines
-
-
-def draw_certificate(original_pil, lines, input_name, input_date, input_expire_date):
+def draw_certificate(original_pil, lines, additional_params=None):
     new_image = original_pil.copy()
     draw = ImageDraw.Draw(new_image)
     new_name = generate_name()
-    # Write the new name
-    replace_text(draw, lines, input_name, new_name)
-    # Generate issue date first
-    issue_date = random_date(start_year=2010, end_year=2024)
-    replace_text(draw, lines, input_date, issue_date)
-    # Convert issue date string to datetime for comparison
-    issue_datetime = datetime.strptime(issue_date, "%B %d, %Y")
-    # Generate expiration date that's after the issue date
-    replace_text(draw, lines, input_expire_date, random_date(format="%m/%d/%Y", 
-                                                             start_year=issue_datetime.year,
-                                                             end_year=2030))
+    
+    # Handle additional parameters
+    if additional_params:
+        for param in additional_params:
+            text = param['text']
+            param_type = param['type']
+            
+            if param_type == 'date1':
+                new_value = random_date(start_year=2010, end_year=2024)
+            elif param_type == 'date2':
+                new_value = random_date(format="%m/%d/%Y", start_year=2010, end_year=2024)
+            elif param_type == 'numeric':
+                new_value = generate_numeric_id(len(text))
+            else:  # text type
+                new_value = generate_name()
+                
+            replace_text(draw, lines, text, new_value)
+    
     # Save the new image
     output_path = f"data/certificate_{new_name.replace(' ', '_')}.png"
     new_image.save(output_path)
@@ -184,25 +220,68 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/generate', methods=['POST'])
-def generate():
+@app.route('/preview', methods=['POST'])
+def preview():
     try:
-        # Check if file was uploaded
         if 'template_image' not in request.files:
-            return render_template('index.html',
-                                 message="No template image uploaded",
-                                 success=False)
+            return {'success': False, 'message': 'No template image uploaded'}
         
         file = request.files['template_image']
         if file.filename == '':
-            return render_template('index.html',
-                                 message="No selected file",
-                                 success=False)
+            return {'success': False, 'message': 'No selected file'}
         
         if not allowed_file(file.filename):
-            return render_template('index.html',
-                                 message="Invalid file type. Please upload PNG, JPG, or JPEG files only.",
-                                 success=False)
+            return {'success': False, 'message': 'Invalid file type'}
+
+        # Save the uploaded file temporarily
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        # Get OCR data
+        _, lines = prepare_image(filepath)
+        
+        # Extract only the text content
+        texts = []
+        for y_coord in lines:
+            for text_info in lines[y_coord]:
+                texts.append(text_info[0])  # text_info[0] contains the actual text
+
+        # Clean up the temporary file
+        os.remove(filepath)
+
+        return {'success': True, 'texts': texts}
+
+    except Exception as e:
+        return {'success': False, 'message': str(e)}
+
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    try:
+        # Check if this is a preview request
+        if request.form.get('preview') == 'true':
+            return preview()
+            
+        # Check if file was uploaded
+        if 'template_image' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No template image uploaded'
+            })
+        
+        file = request.files['template_image']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'No selected file'
+            })
+        
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid file type. Please upload PNG, JPG, or JPEG files only.'
+            })
         
         purge_data(DATA_FOLDER)
 
@@ -213,15 +292,21 @@ def generate():
 
         # Get form data
         num_certificates = int(request.form['num_certificates'])
-        input_name = request.form['input_name']
-        input_date = request.form['input_date']
-        input_expire_date = request.form['input_expire_date']
+        
+        # Get additional parameters
+        additional_params = []
+        if 'additional_params' in request.form:
+            try:
+                additional_params = json.loads(request.form['additional_params'])
+            except json.JSONDecodeError:
+                print("Error parsing additional parameters")
 
         # Validate input
         if num_certificates < 1 or num_certificates > 100:
-            return render_template('index.html', 
-                                 message="Number of certificates must be between 1 and 100",
-                                 success=False)
+            return jsonify({
+                'success': False,
+                'message': 'Number of certificates must be between 1 and 100'
+            })
 
         # Prepare the image using the uploaded template
         original_pil, lines = prepare_image(filepath)
@@ -233,19 +318,25 @@ def generate():
 
         # Generate certificates
         for _ in range(num_certificates):
-            draw_certificate(original_pil, lines, input_name, input_date, input_expire_date)
+            draw_certificate(original_pil, lines, additional_params)
 
         # Clean up the uploaded file
         os.remove(filepath)
 
-        return render_template('index.html',
-                             message=f"Successfully generated {num_certificates} certificate(s)! Data found: {lines}",
-                             success=True)
+        # Get list of generated files
+        generated_files = os.listdir(DATA_FOLDER)
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully generated {num_certificates} certificate(s)!',
+            'files': generated_files
+        })
 
     except Exception as e:
-        return render_template('index.html',
-                             message=f"Error generating certificates: {str(e)}",
-                             success=False)
+        return jsonify({
+            'success': False,
+            'message': f'Error generating certificates: {str(e)}'
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)
