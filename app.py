@@ -73,7 +73,7 @@ def get_encompassing_box(lines, target_words):
 
     if len(word_boxes) != len(target_words):
         print("Not all words found!")
-        return None
+        return None, None
 
     # Find bounding box that covers all words
     x_min = min(x for x, y, w, h in word_boxes)
@@ -154,8 +154,17 @@ def draw_certificate(original_pil, lines, input_name, input_date, input_expire_d
     output_path = f"data/certificate_{new_name.replace(' ', '_')}.png"
     new_image.save(output_path)
 
+def purge_data(DATA_FOLDER):
+    for filename in os.listdir(DATA_FOLDER):
+        file_path = os.path.join(DATA_FOLDER, filename)
+        try:
+            if os.path.isfile(file_path):  # Ensure it's a file, not a folder
+                os.remove(file_path)
+        except Exception as e:
+            print(f"Error deleting {file_path}: {e}")
+
 DATA_FOLDER = os.path.abspath("data")  # Change this if your data folder is elsewhere
- 
+
 
 @app.route("/data/")
 def list_files():
@@ -194,6 +203,8 @@ def generate():
             return render_template('index.html',
                                  message="Invalid file type. Please upload PNG, JPG, or JPEG files only.",
                                  success=False)
+        
+        purge_data(DATA_FOLDER)
 
         # Save the uploaded file
         filename = secure_filename(file.filename)
@@ -217,6 +228,8 @@ def generate():
 
         # Create data directory if it doesn't exist
         os.makedirs('data', exist_ok=True)
+
+        num_certificates = 10 if num_certificates > 10 else num_certificates
 
         # Generate certificates
         for _ in range(num_certificates):
