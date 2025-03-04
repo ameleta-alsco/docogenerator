@@ -15,12 +15,14 @@ import json
 app = Flask(__name__)
 app.secret_key = 'AIzaSyAo-L2tvjg-l1PSES4iX3LBOITrTglhJuU'  # Required for flash messages
 
-# Configure upload folder
+# Configure folders
 UPLOAD_FOLDER = 'uploads'
+DATA_FOLDER = 'data'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(DATA_FOLDER, exist_ok=True)
 
 # Initialize Google Cloud Vision client with credentials from environment or file
 def get_google_credentials():
