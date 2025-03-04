@@ -189,7 +189,8 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="flex: 1;">
                         <label>Replace: ${input}</label>
-                        <input type="text" name="param_${paramId}" value="${input}" style="width: 100%;">
+                        <input type="text" name="param_${paramId}_text" value="${input}" style="width: 100%;">
+                        <input type="hidden" name="param_${paramId}_type" value="${type}">
                     </div>
                     <button type="button" class="remove-param" style="width: auto; margin-left: 10px;">Remove</button>
                 </div>
@@ -214,11 +215,12 @@
             
             // Add additional parameters to formData
             const additionalParams = [];
-            document.querySelectorAll('#additional-params .form-group').forEach((param, index) => {
-                const input = param.querySelector('input[type="text"]');
+            document.querySelectorAll('#additional-params .form-group').forEach((param) => {
+                const textInput = param.querySelector('input[type="text"]');
+                const typeInput = param.querySelector('input[type="hidden"]');
                 additionalParams.push({
-                    text: input.value,
-                    type: document.getElementById('param-type').value
+                    text: textInput.value,
+                    type: typeInput.value
                 });
             });
             
