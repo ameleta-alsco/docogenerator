@@ -22,11 +22,31 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize Google Cloud Vision client with service account credentials
-credentials = service_account.Credentials.from_service_account_file(
-    'idyllic-root-415700-1182fafe8fdc.json'
-)
-vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+# Initialize Google Cloud Vision client with credentials from environment or file
+def get_google_credentials():
+    # First try to get credentials from environment variable
+    credentials_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+    if credentials_json:
+        try:
+            # Parse the JSON string from environment variable
+            credentials_info = json.loads(credentials_json)
+            return service_account.Credentials.from_service_account_info(credentials_info)
+        except json.JSONDecodeError:
+            print("Warning: Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable")
+    
+    # Fallback to file if environment variable is not set or invalid
+    credentials_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'idyllic-root-415700-1182fafe8fdE.json')
+    if os.path.exists(credentials_file):
+        return service_account.Credentials.from_service_account_file(credentials_file)
+    
+    raise ValueError("No valid Google Cloud credentials found. Please set GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable or provide a valid credentials file.")
+
+try:
+    credentials = get_google_credentials()
+    vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+except Exception as e:
+    print(f"Warning: Failed to initialize Google Cloud Vision client: {e}")
+    vision_client = None
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -93,6 +113,9 @@ def replace_text(draw, lines, old_name, new_name, x_offset=0, y_offset=0):
 
 
 def prepare_image(input_image_path):
+    if vision_client is None:
+        raise ValueError("Google Cloud Vision client not initialized. Please check your credentials.")
+        
     # Load the image
     image = cv2.imread(input_image_path)
     
