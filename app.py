@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 import pytesseract
 import random
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, flash, redirect, url_for
+from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, render_template
 import os
 from werkzeug.utils import secure_filename
 
@@ -154,10 +154,26 @@ def draw_certificate(original_pil, lines, input_name, input_date, input_expire_d
     output_path = f"data/certificate_{new_name.replace(' ', '_')}.png"
     new_image.save(output_path)
 
+DATA_FOLDER = os.path.abspath("data")  # Change this if your data folder is elsewhere
+ 
+
+@app.route("/data/")
+def list_files():
+    """Lists files in the /data folder as an HTML page"""
+    files = os.listdir(DATA_FOLDER)
+    return "<br>".join(f'<a href="/data/{file}">{file}</a>' for file in files)
+ 
+
+@app.route("/data/<path:filename>")
+def serve_file(filename):
+    """Serves files from the /data directory"""
+    return send_from_directory(DATA_FOLDER, filename)
+ 
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/generate', methods=['POST'])
 def generate():
