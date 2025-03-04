@@ -6,9 +6,20 @@ import random
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, flash, redirect, url_for
 import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Required for flash messages
+
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Function to generate a random date
 def random_date(format="%B %d, %Y", start_year=2000, end_year=2030):
@@ -151,6 +162,28 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
+        # Check if file was uploaded
+        if 'template_image' not in request.files:
+            return render_template('index.html',
+                                 message="No template image uploaded",
+                                 success=False)
+        
+        file = request.files['template_image']
+        if file.filename == '':
+            return render_template('index.html',
+                                 message="No selected file",
+                                 success=False)
+        
+        if not allowed_file(file.filename):
+            return render_template('index.html',
+                                 message="Invalid file type. Please upload PNG, JPG, or JPEG files only.",
+                                 success=False)
+
+        # Save the uploaded file
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
         # Get form data
         num_certificates = int(request.form['num_certificates'])
         input_name = request.form['input_name']
@@ -163,9 +196,8 @@ def generate():
                                  message="Number of certificates must be between 1 and 100",
                                  success=False)
 
-        # Prepare the image once
-        input_image_path = "1_wbUPv6xLS_dGyyKEYrquSA.png"
-        original_pil, lines = prepare_image(input_image_path)
+        # Prepare the image using the uploaded template
+        original_pil, lines = prepare_image(filepath)
 
         # Create data directory if it doesn't exist
         os.makedirs('data', exist_ok=True)
@@ -173,6 +205,9 @@ def generate():
         # Generate certificates
         for _ in range(num_certificates):
             draw_certificate(original_pil, lines, input_name, input_date, input_expire_date)
+
+        # Clean up the uploaded file
+        os.remove(filepath)
 
         return render_template('index.html',
                              message=f"Successfully generated {num_certificates} certificate(s)!",
