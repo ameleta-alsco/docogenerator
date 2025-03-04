@@ -4,13 +4,15 @@ from PIL import Image, ImageDraw, ImageFont
 import pytesseract
 import random
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, render_template, jsonify
+from flask import Flask, render_template, request, flash, redirect, url_for, send_from_directory, render_template, jsonify, send_file
 import os
 from werkzeug.utils import secure_filename
 from google.cloud import vision
 import io
 from google.oauth2 import service_account
 import json
+import zipfile
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = 'AIzaSyAo-L2tvjg-l1PSES4iX3LBOITrTglhJuU'  # Required for flash messages
@@ -362,6 +364,40 @@ def generate():
             'success': False,
             'message': f'Error generating certificates: {str(e)}'
         })
+
+@app.route('/download-all')
+def download_all():
+    try:
+        # Create a temporary file for the zip
+        temp_dir = tempfile.gettempdir()
+        zip_path = os.path.join(temp_dir, 'certificates.zip')
+        
+        # Create the zip file
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add all files from the data directory
+            for filename in os.listdir(DATA_FOLDER):
+                file_path = os.path.join(DATA_FOLDER, filename)
+                if os.path.isfile(file_path):
+                    zipf.write(file_path, filename)
+        
+        # Send the zip file
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='certificates.zip'
+        )
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error creating zip file: {str(e)}'
+        })
+    finally:
+        # Clean up the temporary zip file
+        try:
+            os.remove(zip_path)
+        except:
+            pass
 
 if __name__ == '__main__':
     app.run(debug=True)
