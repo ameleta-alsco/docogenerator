@@ -32,9 +32,13 @@
                     {% if data_files %}
                         {% for file in data_files %}
                         <div class="file-item">
-                            <a href="{{ url_for('serve_file', filename=file) }}" target="_blank" class="file-link">
-                                {{ file }}
-                            </a>
+                            <div class="file-name">{{ file }}</div>
+                            <div class="file-actions">
+                                <a href="{{ url_for('serve_file', filename=file) }}" target="_blank" class="action-btn download-btn" title="Download">↓</a>
+                                {% if active_page != 'generator' %}
+                                <button class="action-btn use-btn" data-file="{{ url_for('serve_file', filename=file) }}" title="Use this file">→</button>
+                                {% endif %}
+                            </div>
                         </div>
                         {% endfor %}
                     {% else %}
@@ -52,8 +56,38 @@
         </main>
     </div>
 
-    {% block scripts %}
-    <!-- Additional scripts will go here -->
-    {% endblock %}
+    {% block scripts %}{% endblock %}
+    
+    <script>
+    // Add file usage functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileInput = document.getElementById('document_image');
+        if (fileInput) {
+            document.querySelectorAll('.use-btn').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const fileUrl = this.dataset.file;
+                    try {
+                        const response = await fetch(fileUrl);
+                        const blob = await response.blob();
+                        const file = new File([blob], 'selected-file.jpg', { type: blob.type });
+                        
+                        // Create a DataTransfer object and add the file
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        
+                        // Set the file input's files
+                        fileInput.files = dataTransfer.files;
+                        
+                        // Trigger the change event
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (error) {
+                        console.error('Error loading file:', error);
+                        alert('Error loading file');
+                    }
+                });
+            });
+        }
+    });
+    </script>
 </body>
 </html> 
