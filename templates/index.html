@@ -1,70 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certificate Generator</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-</head>
-<body>
-    <div class="container">
-        <h1>Certificate Generator</h1>
-        <form method="POST" action="/generate" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="template_image">Certificate Template Image:</label>
-                <input type="file" id="template_image" name="template_image" accept="image/*" required>
-                <div class="file-info">Supported formats: PNG, JPG, JPEG</div>
-                <div id="preview-container" style="margin-top: 10px; display: none;">
-                    <h3>Preview</h3>
-                    <div style="display: flex; gap: 20px;">
-                        <div style="flex: 1;">
-                            <h4>Uploaded Image</h4>
-                            <img id="preview-image" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
-                        </div>
-                        <div style="flex: 1;">
-                            <h4>Detected Text</h4>
-                            <div id="ocr-lines" style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
-                        </div>
+{% extends "base.html" %}
+
+{% block title %}Certificate Generator{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Certificate Generator</h1>
+    <form method="POST" action="/generate" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="template_image">Certificate Template Image:</label>
+            <input type="file" id="template_image" name="template_image" accept="image/*" required>
+            <div class="file-info">Supported formats: PNG, JPG, JPEG</div>
+            <div id="preview-container" style="margin-top: 10px; display: none;">
+                <h3>Preview</h3>
+                <div style="display: flex; gap: 20px;">
+                    <div style="flex: 1;">
+                        <h4>Uploaded Image</h4>
+                        <img id="preview-image" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="flex: 1;">
+                        <h4>Detected Text</h4>
+                        <div id="ocr-lines" style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
                     </div>
                 </div>
             </div>
-            <div class="form-group">
-                <label for="num_certificates">Number of Certificates to Generate:</label>
-                <input type="number" id="num_certificates" name="num_certificates" min="1" max="100" value="1" required>
-            </div>
-            <div class="form-group">
-                <h3>Additional Parameters</h3>
-                <div id="additional-params">
-                    <!-- Additional parameters will be added here -->
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <input type="text" id="param-input" placeholder="What to replace" style="flex: 2;">
-                    <select id="param-type" style="flex: 1;" title="Select the type of parameter to replace">
-                        <option value="text">Random Name</option>
-                        <option value="date1">Random Date (Month Day, Year)</option>
-                        <option value="date2">Random Date (MM/DD/YYYY)</option>
-                        <option value="numeric">Random Numeric ID</option>
-                    </select>
-                    <button type="button" id="add-param" style="width: auto;">Add</button>
-                </div>
-            </div>
-            <button type="submit">Generate Certificates</button>
-        </form>
-        {% if message %}
-        <div class="result {{ 'success' if success else 'error' }}">
-            {{ message }}
         </div>
-        {% endif %}
-        <div id="generated-files" style="margin-top: 20px; display: none;">
-            <h3>Generated Certificates</h3>
-            <div style="margin-bottom: 10px;">
-                <a href="/download-all" class="download-all-btn" style="display: inline-block; background-color: #4CAF50; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; margin-bottom: 10px;">
-                    Download All Certificates (ZIP)
-                </a>
-            </div>
-            <div id="files-list" style="background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+        <div class="form-group">
+            <label for="num_certificates">Number of Certificates to Generate:</label>
+            <input type="number" id="num_certificates" name="num_certificates" min="1" max="100" value="1" required>
         </div>
+        <div class="form-group">
+            <h3>Additional Parameters</h3>
+            <div id="additional-params">
+                <!-- Additional parameters will be added here -->
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <input type="text" id="param-input" placeholder="What to replace" style="flex: 2;">
+                <select id="param-type" style="flex: 1;" title="Select the type of parameter to replace">
+                    <option value="text">Random Name</option>
+                    <option value="date1">Random Date (Month Day, Year)</option>
+                    <option value="date2">Random Date (MM/DD/YYYY)</option>
+                    <option value="numeric">Random Numeric ID</option>
+                </select>
+                <button type="button" id="add-param" style="width: auto;">Add</button>
+            </div>
+        </div>
+        <button type="submit">Generate Certificates</button>
+    </form>
+    {% if message %}
+    <div class="result {{ 'success' if success else 'error' }}">
+        {{ message }}
     </div>
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
-</body>
-</html> 
+    {% endif %}
+    <div id="generated-files" style="margin-top: 20px; display: none;">
+        <h3>Generated Certificates</h3>
+        <div style="margin-bottom: 10px;">
+            <a href="/download-all" class="download-all-btn">Download All Certificates (ZIP)</a>
+        </div>
+        <div id="files-list"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+{% endblock %} 

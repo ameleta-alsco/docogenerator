@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Document Recognizer{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Document Recognizer</h1>
+    <form id="recognizer-form" method="POST" action="/recognize" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="document_image">Upload Document:</label>
+            <input type="file" id="document_image" name="document_image" accept="image/*" required>
+            <div class="file-info">Supported formats: PNG, JPG, JPEG</div>
+        </div>
+        <div id="preview-container" style="margin-top: 10px; display: none;">
+            <h3>Preview</h3>
+            <img id="preview-image" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <button type="submit" id="recognize-btn">Recognize Document</button>
+    </form>
+
+    <div id="results-panel" class="results-panel" style="display: none;">
+        <h3>Recognition Results</h3>
+        <div class="result-item">
+            <label>Document ID:</label>
+            <div id="document-id" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Title:</label>
+            <div id="title" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Description:</label>
+            <div id="description" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Issued To:</label>
+            <div id="issued-to" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Issuing Authority:</label>
+            <div id="issuing-authority" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Issued Date:</label>
+            <div id="issued-date" class="result-value"></div>
+        </div>
+        <div class="result-item">
+            <label>Expiry Date:</label>
+            <div id="expiry-date" class="result-value"></div>
+        </div>
+        <div class="raw-text">
+            <h4>Detected Text</h4>
+            <pre id="raw-text"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.results-panel {
+    margin-top: 2rem;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
+.result-item {
+    margin-bottom: 1rem;
+}
+
+.result-item label {
+    font-weight: bold;
+    color: #666;
+}
+
+.result-value {
+    margin-top: 0.25rem;
+    padding: 0.5rem;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.raw-text {
+    margin-top: 1.5rem;
+}
+
+.raw-text pre {
+    background-color: white;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('document_image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Show preview
+    const previewContainer = document.getElementById('preview-container');
+    const previewImage = document.getElementById('preview-image');
+    previewContainer.style.display = 'block';
+    previewImage.src = URL.createObjectURL(file);
+});
+
+document.getElementById('recognizer-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitButton = document.getElementById('recognize-btn');
+    const originalText = submitButton.textContent;
+    
+    // Show loading state
+    submitButton.textContent = 'Processing...';
+    submitButton.disabled = true;
+    
+    fetch('/recognize', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show results panel
+            document.getElementById('results-panel').style.display = 'block';
+            
+            // Update results
+            document.getElementById('document-id').textContent = data.results.document_id || 'Not found';
+            document.getElementById('title').textContent = data.results.title || 'Not found';
+            document.getElementById('description').textContent = data.results.description || 'Not found';
+            document.getElementById('issued-to').textContent = data.results.issued_to || 'Not found';
+            document.getElementById('issuing-authority').textContent = data.results.issuing_authority || 'Not found';
+            document.getElementById('issued-date').textContent = data.results.issued_date || 'Not found';
+            document.getElementById('expiry-date').textContent = data.results.expiry_date || 'Not found';
+            document.getElementById('raw-text').textContent = data.raw_text;
+        } else {
+            alert(data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error processing document');
+    })
+    .finally(() => {
+        // Reset button state
+        submitButton.textContent = originalText;
+        submitButton.disabled = false;
+    });
+});
+</script>
+{% endblock %} 

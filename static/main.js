@@ -1,3 +1,29 @@
+// Function to update the left panel files list
+function updateLeftPanel(files) {
+    const leftPanelFilesList = document.querySelector('.left-panel .files-list');
+    const panelHeader = document.querySelector('.left-panel .panel-header');
+    
+    if (files && files.length > 0) {
+        // Update files list
+        leftPanelFilesList.innerHTML = files.map(file => `
+            <div class="file-item">
+                <a href="/data/${file}" target="_blank" class="file-link">${file}</a>
+            </div>
+        `).join('');
+        
+        // Ensure download button exists
+        if (!panelHeader.querySelector('.download-all-btn')) {
+            panelHeader.innerHTML += '<a href="/download-all" class="download-all-btn">Download All (ZIP)</a>';
+        }
+    } else {
+        leftPanelFilesList.innerHTML = '<p class="no-files">No files generated yet</p>';
+        const downloadBtn = panelHeader.querySelector('.download-all-btn');
+        if (downloadBtn) {
+            downloadBtn.remove();
+        }
+    }
+}
+
 // Handle file upload and preview
 document.getElementById('template_image').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -113,12 +139,15 @@ document.querySelector('form').addEventListener('submit', function(e) {
             document.querySelector('.result')?.remove();
             document.querySelector('.container').insertBefore(resultDiv, document.getElementById('generated-files'));
             
-            // Display generated files
+            // Update both the main content area and left panel
             const filesList = document.getElementById('files-list');
             filesList.innerHTML = data.files.map(file => 
                 `<div><a href="/data/${file}" target="_blank">${file}</a></div>`
             ).join('');
             document.getElementById('generated-files').style.display = 'block';
+            
+            // Update left panel
+            updateLeftPanel(data.files);
         } else {
             // Display error message
             const resultDiv = document.createElement('div');

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_from_directory, jsonify, send_file
+from flask import Flask, render_template, request, send_from_directory, jsonify, send_file, redirect, url_for
 import os
 from werkzeug.utils import secure_filename
 import json
@@ -11,6 +11,7 @@ from utils.certificate_utils import (
     allowed_file, draw_certificate
 )
 from utils.file_utils import purge_data, ensure_directories, generate_unique_filename
+from utils.recognizer_utils import analyze_document, extract_document_info
 
 app = Flask(__name__)
 app.secret_key = 'AIzaSyAo-L2tvjg-l1PSES4iX3LBOITrTglhJuU'  # Required for flash messages
@@ -30,9 +31,31 @@ except Exception as e:
     print(f"Warning: Failed to initialize Google Cloud Vision client: {e}")
     vision_client = None
 
+def get_data_folder_contents():
+    """Get list of files in the data folder"""
+    if os.path.exists(DATA_FOLDER):
+        files = os.listdir(DATA_FOLDER)
+        return sorted(files)
+    return []
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return redirect(url_for('generator'))
+
+@app.route('/generator')
+def generator():
+    files = get_data_folder_contents()
+    return render_template('index.html', active_page='generator', data_files=files)
+
+@app.route('/recognizer')
+def recognizer():
+    files = get_data_folder_contents()
+    return render_template('recognizer.html', active_page='recognizer', data_files=files)
+
+@app.route('/comparer')
+def comparer():
+    files = get_data_folder_contents()
+    return render_template('comparer.html', active_page='comparer', data_files=files)
 
 @app.route('/preview', methods=['POST'])
 def preview():
@@ -192,6 +215,60 @@ def download_all():
             os.remove(zip_path)
         except:
             pass
+
+@app.route('/recognize', methods=['POST'])
+def recognize():
+    try:
+        if 'document_image' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'No document image uploaded'
+            })
+        
+        file = request.files['document_image']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'No selected file'
+            })
+        
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'message': 'Invalid file type. Please upload PNG, JPG, or JPEG files only.'
+            })
+
+        # Save the uploaded file temporarily
+        filename = generate_unique_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        try:
+            # Extract text using Google Vision API
+            raw_text = analyze_document(vision_client, filepath)
+            
+            # Extract specific information using ChatGPT
+            results = extract_document_info(raw_text)
+            
+            # Parse the JSON string from ChatGPT response
+            if isinstance(results, str):
+                results = json.loads(results)
+            
+            return jsonify({
+                'success': True,
+                'raw_text': raw_text,
+                'results': results
+            })
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error processing document: {str(e)}'
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)
